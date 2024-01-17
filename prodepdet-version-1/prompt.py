@@ -9,14 +9,21 @@ from .data_processor import data_processor_list
 from .utils import decorate
 from .modelling_roberta import RobertaEmbeddings
 from .modelling_wsw import WSWEmbeddings
+from .training_args import TrainingArguments
 
 
 class PromptKernel(Trainer):
 
     def __init__(self, prompt_emb=None, **kwargs):
-        self.prompt_emb = prompt_emb
         args = kwargs['args']
+        args.demonstration_type = "prompt_tuning"
+        self.prompt_emb = prompt_emb
+        self.demonstration_n = args.demonstration_sample
+        self.latent_dropout = args.latent_dropout
         self.out_dir_root = args.output_dir
+        self.pt_demonstration_input_layer = args.pt_demonstration_input_layer
+        self.pt_demonstration_output_layer = args.pt_demonstration_output_layer
+        self.pt_activation = args.backbone.activation
 
         processor = data_processor_list[args.dataset]()
 
@@ -98,6 +105,12 @@ class PromptKernel(Trainer):
             verbalizer = SoftVerbalizer(tokenizer, model=plm, classes=processor.labels,
                                         label_words=processor.label_words)
 
+        # Set In-Context Demonstrations (ICD). This is the first time of using ICD in out-of-domain task transfer to
+        # our knowledge.
+        if hasattr(self, 'demonstration_type') and args.demonstration_type is not None:
+            self.set_in_context_demonstrations(demonstration_type=self.demonstration_type,
+                                               demonstration_sample=self.get_prompt_emb(args, model_config))
+
         if hasattr(self, 'model') and self.model is not None:
             model = self.model
         else:
@@ -141,6 +154,23 @@ class PromptKernel(Trainer):
                 "The forward function might have been wrapped by a decorator, is it intended? Do you freeze the "
                 "parameters twice?")
         module.state_dict = decorate(module.state_dict, _caller, extras=(includes,), kwsyntax=True)
+
+    def set_in_context_demonstrations(self, demonstration_type, demonstration_sample):
+        self.demonstration_n = demonstration_sample
+        self.latent_dropout = nn.Dropout(0.1)
+        self.config.demonstration_type = demonstration_type
+
+        if TrainingArguments.demonstration_type == "prompt_tuning":
+            self.demonstration_n = demonstration_sample
+            self.prompt_emb = nn.Embedding(demonstration_sample, nn.Embedding.embedding_dim)
+            nn.LayerNorm(nn.Embedding.embedding_dim, eps=self.config.layer_norm_eps)
+            self.prompt_emb.weight = self.prompt_emb
+            self.pt_demonstration_input_layer = nn.Linear(nn.Embedding.embedding_dim, nn.Embedding.embedding_dim * 4)
+            self.pt_activation = nn.GELU
+            self.pt_demonstration_output_layer = nn.Linear(nn.Embedding.embedding_dim * 4, nn.Embedding.embedding_dim)
+            nn.LayerNorm(nn.Embedding.embedding_dim, eps=self.config.layer_norm_eps)
+        else:
+            raise NotImplementedError
 
     @torch.no_grad()
     def get_prompt_emb(self, args, config):

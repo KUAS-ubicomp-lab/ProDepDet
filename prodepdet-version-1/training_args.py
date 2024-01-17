@@ -57,6 +57,10 @@ class TrainingArguments(TrainingArguments):
     model_parallel: bool = field(
         default=False, metadata={"help": "Whether to use model parallelism."}
     )
+    demonstration_type: Optional[str] = field(
+        default='prompt_tuning',
+        metadata={"help": "The type of the demonstrations to be used as in-context demonstrations."}
+    )
 
     def __post_init__(self):
         super().__post_init__()

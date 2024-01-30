@@ -47,22 +47,6 @@ class PromptBertEmbeddings(PromptEmbeddings, BertEmbeddings):
             inputs_embeds = self.word_embeddings(input_ids)
             inputs_embeds = self.prepare_prompt_embeddings(inputs_embeds, self.word_embeddings)
 
-            # # input_ids: [<mask>, prompt_0, prompt_1, ..., prompt_L-1, token_0, token_1, ..., token_N-1]
-            # # L: prompt length
-            # # N: sentence length
-
-            # # Sentence embeddings
-            # select_word = (input_ids >= 0).int()
-            # word_embeds = self.word_embeddings(input_ids * select_word) * select_word.unsqueeze(2)
-
-            # # Prompt embeddings
-            # select_prompt = (input_ids < 0).int()
-            # prompt_ids = - (input_ids + 1)
-            # prompt_embs = self.prompt_embeddings(prompt_ids * select_prompt) * select_prompt.unsqueeze(2)
-
-            # # Sum to get input_embed
-            # inputs_embeds = word_embeds + prompt_embs
-
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
         embeddings = inputs_embeds + token_type_embeddings
@@ -123,11 +107,6 @@ class PromptBert(PromptModel):
             return_dict=return_dict,
         )['logits']  # [batch_size, seq_length, vocab_size]
         mask_logits = lm_output[:, 0]  # [batch_size, vocab_size], select the logits of <mask>, which is the 1st token
-
-        # Select scores based on verbalizer
-        # logits = []
-        # for label_mapped_token_id in verbalizer.values():
-        #     logits.append(mask_logits[:, label_mapped_token_id].unsqueeze(1))
         logits = torch.cat([mask_logits[:, 4997].unsqueeze(1), mask_logits[:, 3893].unsqueeze(1)], dim=1)
 
         loss = None
@@ -154,7 +133,3 @@ class PromptBert(PromptModel):
                 loss = loss_fct(logits, labels)
 
         return loss, logits
-        # return SequenceClassifierOutput(
-        #     loss=loss,
-        #     logits=logits,
-        # )

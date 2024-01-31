@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from openprompt import PromptForClassification
@@ -186,3 +187,29 @@ class PromptKernel(Trainer):
             prompt_emb = WSWEmbeddings(config=config)
 
         return prompt_emb.prompt_embeddings.weight
+
+    def train_prompt(self, model=None, task=None, **kwargs):
+        device = torch.device('cuda:1')
+
+        with torch.device('cuda:1'):
+            self.args.output_dir = os.path.join(self.out_dir_root, 'prompt_emb')
+            os.makedirs(self.args.output_dir, exist_ok=True)
+
+            if model is None:
+                model = self.model
+            else:
+                if isinstance(model, str):
+                    if model != self.args.backbone:
+                        processor = data_processor_list[task]
+                        model, template, verbalizer, plm, tokenizer, model_config, tokenizer_wrapper_class, \
+                            model_type = self.get_model(model, processor, self.args.backbone)
+                    else:
+                        model = self.model
+                elif isinstance(model, torch.nn.Module):
+                    pass
+            self._move_model_to_device(model=model, device=device)
+
+            if task != self.args.dataset:
+                processor = data_processor_list[self.args.dataset]()
+                self.train_dataset = processor.train_dataset
+            return super().train(**kwargs)

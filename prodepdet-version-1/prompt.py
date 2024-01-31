@@ -1,10 +1,11 @@
 import os
 import torch
 import torch.nn as nn
-from openprompt import PromptForClassification
+from openprompt import PromptForClassification, PromptDataLoader
 from openprompt.plms import load_plm
 from openprompt.prompts import SoftTemplate, SoftVerbalizer
 from transformers import Trainer
+from torch.utils.data import DataLoader
 
 from .data_processor import data_processor_list
 from .utils import decorate
@@ -130,6 +131,37 @@ class PromptKernel(Trainer):
 
         return model, template, verbalizer, plm, tokenizer, model_config, tokenizer_wrapper_class, model_type
 
+    @torch.no_grad()
+    def get_prompt_emb(self, args, config):
+        prompt_emb = []
+
+        if 'bert-' in args.backbone:
+            prompt_emb = args.backbone.bert.embeddings.prompt_embeddings
+
+        if 'roberta-' in args.backbone:
+            prompt_emb = RobertaEmbeddings(config=config)
+
+        if 'wsw-' in args.backbone:
+            prompt_emb = WSWEmbeddings(config=config)
+
+        return prompt_emb.prompt_embeddings.weight
+
+    def get_train_dataloader(self) -> DataLoader:
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training requires a train_dataset.")
+
+        train_dataloader = PromptDataLoader(
+            dataset=self.train_dataset,
+            template=self.template,
+            tokenizer=self.tokenizer,
+            tokenizer_wrapper_class=self.tokenizer_wrapper_class,
+            batch_size=self._train_batch_size,
+            max_seq_length=self.args.max_source_length,
+            decoder_max_length=1,
+            shuffle=True)
+
+        return train_dataloader
+
     def compute_loss(self, model, inputs, return_outputs=False):
         outputs = model(inputs)
         if self.args.past_index >= 0:
@@ -172,21 +204,6 @@ class PromptKernel(Trainer):
             nn.LayerNorm(nn.Embedding.embedding_dim, eps=self.config.layer_norm_eps)
         else:
             raise NotImplementedError
-
-    @torch.no_grad()
-    def get_prompt_emb(self, args, config):
-        prompt_emb = []
-
-        if 'bert-' in args.backbone:
-            prompt_emb = args.backbone.bert.embeddings.prompt_embeddings
-
-        if 'roberta-' in args.backbone:
-            prompt_emb = RobertaEmbeddings(config=config)
-
-        if 'wsw-' in args.backbone:
-            prompt_emb = WSWEmbeddings(config=config)
-
-        return prompt_emb.prompt_embeddings.weight
 
     def train_prompt(self, model=None, task=None, **kwargs):
         device = torch.device('cuda:1')

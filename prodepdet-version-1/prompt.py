@@ -213,3 +213,34 @@ class PromptKernel(Trainer):
                 processor = data_processor_list[self.args.dataset]()
                 self.train_dataset = processor.train_dataset
             return super().train(**kwargs)
+
+    def eval_prompt(self, model=None, eval_dataset=None, prompt_emb=None):
+        with torch.device('cuda:1'):
+            self.args.output_dir = os.path.join(self.out_dir_root, 'prompt_emb')
+            os.makedirs(self.args.output_dir, exist_ok=True)
+
+            if model is not None and isinstance(model, str) and model != self.args.backbone:
+                model, template, verbalizer, plm, tokenizer, model_config, tokenizer_wrapper_class, \
+                    model_type = self.get_model(model, self.args.processor, self.args.backbone)
+                self.model = model
+
+            if prompt_emb is not None:
+                if isinstance(prompt_emb, str):
+                    prompt_emb = torch.load(prompt_emb, map_location='cpu')
+                elif isinstance(prompt_emb, torch.Tensor):
+                    pass
+                else:
+                    raise NotImplementedError
+                self.args.backbone.roberta.embeddings = nn.Parameter(prompt_emb.detach())
+
+            if eval_dataset is None or eval_dataset == self.args.dataset:
+                eval_dataset = self.eval_dataset
+            elif eval_dataset != self.args.dataset:  # Use a dataset different from the source task
+                processor = data_processor_list[eval_dataset]()
+                eval_dataset = processor.eval_dataset
+            else:
+                raise NotImplementedError
+
+            metrics = self.evaluate(eval_dataset=eval_dataset)
+            self.save_metrics("eval_prompt", metrics)
+            return metrics

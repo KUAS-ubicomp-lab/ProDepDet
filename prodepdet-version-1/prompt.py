@@ -1,11 +1,12 @@
 import os
 import torch
 import torch.nn as nn
+from typing import Optional
 from openprompt import PromptForClassification, PromptDataLoader
 from openprompt.plms import load_plm
 from openprompt.prompts import SoftTemplate, SoftVerbalizer
 from transformers import Trainer
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from .data_processor import data_processor_list
 from .utils import decorate
@@ -153,6 +154,7 @@ class PromptKernel(Trainer):
         train_dataloader = PromptDataLoader(
             dataset=self.train_dataset,
             template=self.template,
+            verbalizer=self.verbalizer,
             tokenizer=self.tokenizer,
             tokenizer_wrapper_class=self.tokenizer_wrapper_class,
             batch_size=self._train_batch_size,
@@ -161,6 +163,26 @@ class PromptKernel(Trainer):
             shuffle=True)
 
         return train_dataloader
+
+    def get_eval_dataloader(self, eval_dataset: Optional[Dataset] = None) -> DataLoader:
+        if eval_dataset is None and self.eval_dataset is None:
+            raise ValueError("Trainer: evaluation requires an eval_dataset.")
+
+        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+
+        validation_dataloader = PromptDataLoader(
+            dataset=eval_dataset,
+            template=self.template,
+            verbalizer=self.verbalizer,
+            tokenizer=self.tokenizer,
+            tokenizer_wrapper_class=self.tokenizer_wrapper_class,
+            batch_size=self.args.per_device_eval_batch_size,
+            max_seq_length=self.args.max_source_length,
+            decoder_max_length=1,
+            device=torch.device("cuda:1"),
+            shuffle=False)
+
+        return validation_dataloader
 
     def compute_loss(self, model, inputs, return_outputs=False):
         outputs = model(inputs)

@@ -1,3 +1,6 @@
+# What's New?
+ July 2024: ProDepDet wins the [Honorable Mentioned Award](https://sites.google.com/view/cissgc-2024/award) at the 2024 IEEE CIS Student Grant Competition in Computational Intelligence in Biomedicine and Healthcare for the proposal entitled <b><i>Vishadha: Early Smart Depression Detector</i></b>.
+
 # <B> ProDepDet </B>
 ProDepDet is a framework which is specifically designed to use the knowledge of a pre-trained language model (PLM) in structure and semantic modelling in multi-party conversations to perform depression detection which is an unseen out-of-domain task. To our knowledge, this study is the first attempt to adapt the acquired knowledge of a PLM for out-of-domain task modelling using prompt tuning (PT)-based cross-task transferability.
 
